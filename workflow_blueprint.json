@@ -1,0 +1,108 @@
+{
+  "name": "AI-Lead-Routing-Engine",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-capture",
+        "responseMode": "lastNode"
+      },
+      "name": "Webhook (Lead Capture )",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "headerAuth",
+        "requestMethod": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "={\n  \"model\": \"llama3-8b-8192\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are an expert intent classifier. Extract Name, Email, and Budget from the user message. Classify intent as SALES or SUPPORT. Output strict JSON.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"{{$json.body.message}}\"\n    }\n  ],\n  \"response_format\": { \"type\": \"json_object\" }\n}"
+      },
+      "name": "Groq Llama-3 (Intent & Extraction )",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{JSON.parse($json.choices[0].message.content ).intent}}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "SALES",
+              "output": 0
+            },
+            {
+              "value2": "SUPPORT",
+              "output": 1
+            }
+          ]
+        }
+      },
+      "name": "Intent Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": "YOUR_GOOGLE_SHEET_ID",
+        "sheetName": "Sheet1",
+        "dataMode": "define",
+        "values": {
+          "values": [
+            { "column": "Name", "value": "={{JSON.parse($json.choices[0].message.content).Name}}" },
+            { "column": "Email", "value": "={{JSON.parse($json.choices[0].message.content).Email}}" },
+            { "column": "Budget", "value": "={{JSON.parse($json.choices[0].message.content).Budget}}" }
+          ]
+        }
+      },
+      "name": "Google Sheets (CRM)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 3,
+      "position": [950, 200]
+    }
+  ],
+  "connections": {
+    "Webhook (Lead Capture)": {
+      "main": [
+        [
+          {
+            "node": "Groq Llama-3 (Intent & Extraction)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Llama-3 (Intent & Extraction)": {
+      "main": [
+        [
+          {
+            "node": "Intent Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Intent Router": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets (CRM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {}
+}
